@@ -81,7 +81,8 @@ in
         static-map2 = "/horizon/static=${cfg.package}/static-compressed";
 
         enable-threads = true;
-        pythonPackages = _: [
+        pythonPackages = ps: [
+          ps.django
           horizon
         ];
         processes = 3;
