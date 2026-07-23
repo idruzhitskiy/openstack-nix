@@ -83,7 +83,7 @@ in
         enable-threads = true;
         pythonPackages = ps: [
           ps.django
-          horizon
+          ps.horizon
         ];
         processes = 3;
         threads = 10;
