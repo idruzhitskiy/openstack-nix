@@ -16,6 +16,7 @@ python3Packages.buildPythonPackage rec {
   pyproject = true;
 
   nativeBuildInputs = [
+    django
     setuptools
     pip
   ];
