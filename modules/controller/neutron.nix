@@ -110,7 +110,27 @@ let
     ovsdb_debug = true
   '';
 
-  neutron_env = pkgs.python3.buildEnv.override {
+  # IMPORTANT: build the combined Python environment with the *same* Python
+  # interpreter that the neutron package itself was built against
+  # (neutron.pythonModule), NOT the host system's pkgs.python3.
+  #
+  # python3.buildEnv filters extraLibs through requiredPythonModules, which
+  # silently DROPS any package whose pythonModule is a different Python
+  # derivation than the env's interpreter. When this module is consumed from
+  # a system whose nixpkgs differs from this flake's nixpkgs, the two
+  # python3 derivations are different store paths, neutron gets dropped, and
+  # neutron_env degenerates to a bare interpreter: no neutron-* scripts and
+  # no privsep-helper in its bin/.
+  #
+  # rootwrapConf points exec_dirs at this env's bin, so the visible symptom
+  # was: oslo.rootwrap exits 96 (RC_NOEXECFOUND: filter matched, executable
+  # not found in exec_dirs) -> oslo_privsep.daemon.FailedToDropPrivileges:
+  # "privsep helper command exited non-zero (96)" -> the OVS agent dies.
+  #
+  # Using neutron.pythonModule makes the env correct regardless of which
+  # nixpkgs the consuming system is built from.
+  neutron_python = neutron.pythonModule;
+  neutron_env = neutron_python.buildEnv.override {
     extraLibs = [ neutron ];
   };
   utils_env = pkgs.buildEnv {
@@ -173,6 +193,16 @@ in
     };
   };
   config = mkIf cfg.enable {
+
+    # Fail at eval time with a clear message if the env got emptied out
+    # (e.g. someone reverts the pythonModule fix above). An empty env here
+    # reproduces the hard-to-debug rootwrap exit 96 at runtime.
+    assertions = [
+      {
+        assertion = neutron.pythonModule == neutron_python;
+        message = "neutron_env must be built with neutron's own Python (neutron.pythonModule); see comment in neutron module.";
+      }
+    ];
 
     users.extraUsers.neutron = {
       group = "neutron";
